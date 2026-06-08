@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IDR Spectrum — USD/IDR Live</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0d;
+  --surface: #141414;
+  --surface2: #1a1a1a;
+  --border: #222;
+  --text: #e8e8e8;
+  --muted: #555;
+  --accent: #00e676;
+  --accent-dim: #00e67622;
+  --red: #ff5252;
+  --red-dim: #ff525222;
+  --gold: #ffd54f;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-body: 'Inter', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+
+/* TOP HEADER */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.live-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: livepulse 1.2s ease-in-out infinite;
+}
+
+@keyframes livepulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* RATE DISPLAY */
+.rate-section {
+  margin-bottom: 28px;
+}
+
+.rate-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-weight: 300;
+  margin-bottom: 4px;
+  letter-spacing: 0.2px;
+}
+
+.rate-main {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rate-number {
+  font-family: var(--font-display);
+  font-size: clamp(44px, 9vw, 72px);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: -2px;
+  transition: color 0.15s;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-currency {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -1px;
+}
+
+.rate-change {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.rate-change.show { opacity: 1; }
+.rate-change.up { background: var(--accent-dim); color: var(--accent); }
+.rate-change.down { background: var(--red-dim); color: var(--red); }
+
+.rate-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: 0.3px;
+}
+
+/* CHART */
+.chart-wrapper {
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+
+.chart-y-labels {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  pointer-events: none;
+  padding: 2px 0;
+  min-width: 52px;
+  text-align: right;
+}
+
+.chart-x-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding: 4px 0 20px;
+  padding-right: 52px;
+}
+
+/* PERIOD TABS */
+.period-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.period-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 0.5px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.period-tab:hover { color: var(--text); border-color: #444; }
+.period-tab.active {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: #444;
+}
+
+/* DIVIDER */
+.divider {
+  height: 0.5px;
+  background: var(--border);
+  margin: 24px 0;
+}
+
+/* AUDIO PANEL */
+.audio-panel {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.audio-panel-header {
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.audio-panel-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.mode-tab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border: 0.5px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  letter-spacing: 0.5px;
+}
+
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.drop-zone {
+  display: block;
+  padding: 28px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 0.5px solid var(--border);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drop-zone:hover, .drop-zone.dragover {
+  background: var(--surface2);
+}
+
+.drop-zone-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.drop-zone-text {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.drop-zone-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #333;
+  letter-spacing: 1px;
+}
+
+.drop-zone-sub span {
+  color: #444;
+  margin: 0 4px;
+}
+
+.file-input { display: none; }
+
+/* SPECTRUM */
+.spectrum-container {
+  padding: 16px 18px;
+  background: #0a0a0a;
+  position: relative;
+  overflow: hidden;
+}
+
+.spectrum-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 80px;
+  margin-bottom: 8px;
+}
+
+.spec-bar {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+  min-height: 1px;
+  transition: height 0.04s linear;
+  transform-origin: bottom;
+}
+
+.spectrum-freq-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #333;
+  letter-spacing: 0.5px;
+}
+
+/* PLAYER */
+.player-bar {
+  padding: 14px 18px;
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.play-btn:hover { border-color: #555; background: #222; }
+.play-btn.playing { border-color: var(--accent); color: var(--accent); }
+
+.progress-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  position: relative;
+  cursor: pointer;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.vol-icon { font-size: 13px; color: var(--muted); }
+
+.vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 60px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  outline: none;
+  cursor: pointer;
+}
+
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+}
+
+.file-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* FLIP TOGGLE */
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-top: 0.5px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+.toggle-box {
+  width: 28px;
+  height: 14px;
+  border: 0.5px solid var(--border);
+  border-radius: 7px;
+  position: relative;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.toggle-box::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: all 0.2s;
+}
+
+input[type=checkbox]:checked + .toggle-label .toggle-box {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+input[type=checkbox]:checked + .toggle-label .toggle-box::after {
+  left: 16px;
+  background: var(--accent);
+}
+
+input[type=checkbox] { display: none; }
+
+/* FOOTER */
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer-text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #333;
+  letter-spacing: 0.5px;
+}
+
+.footer-link {
+  color: #444;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.footer-link:hover { color: var(--muted); }
+
+/* FLASH ANIMATION */
+@keyframes flashup {
+  0% { color: var(--accent); }
+  100% { color: var(--text); }
+}
+
+@keyframes flashdown {
+  0% { color: var(--red); }
+  100% { color: var(--text); }
+}
+
+.flash-up { animation: flashup 0.4s ease-out; }
+.flash-down { animation: flashdown 0.4s ease-out; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="logo">IDR · SPECTRUM</div>
+    <div class="live-badge">
+      <div class="live-dot" id="live-dot"></div>
+      <span id="live-text">—</span>
+    </div>
+  </div>
+
+  <!-- RATE DISPLAY -->
+  <div class="rate-section">
+    <div class="rate-label">1 Dolar Amerika Serikat sama dengan</div>
+    <div class="rate-main">
+      <div class="rate-number" id="rate-number">—</div>
+      <div class="rate-change" id="rate-change"></div>
+    </div>
+    <div class="rate-currency">Rupiah Indonesia</div>
+    <div class="rate-meta" id="rate-meta">Memuat data kurs...</div>
+  </div>
+
+  <!-- PERIOD TABS -->
+  <div class="period-tabs">
+    <button class="period-tab" onclick="setPeriod('1D')">1HR</button>
+    <button class="period-tab" onclick="setPeriod('5D')">5HR</button>
+    <button class="period-tab active" onclick="setPeriod('1M')">1BLN</button>
+    <button class="period-tab" onclick="setPeriod('1Y')">1TH</button>
+    <button class="period-tab" onclick="setPeriod('5Y')">5TH</button>
+    <button class="period-tab" onclick="setPeriod('MAX')">MAKS</button>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-wrapper">
+    <canvas class="chart-canvas" id="chart-canvas"></canvas>
+    <div class="chart-y-labels" id="y-labels"></div>
+  </div>
+  <div class="chart-x-labels" id="x-labels"></div>
+
+  <div class="divider"></div>
+
+  <!-- AUDIO PANEL -->
+  <div class="audio-panel">
+    <div class="audio-panel-header">
+      <div class="audio-panel-title">Sumber Audio</div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" onclick="setMode('BASS')">BASS</button>
+        <button class="mode-tab" onclick="setMode('MID')">MID</button>
+        <button class="mode-tab" onclick="setMode('FULL')">FULL</button>
+        <button class="mode-tab" onclick="setMode('WAVE')">WAVE</button>
+        <button class="mode-tab" onclick="setMode('MAKS')">MAKS</button>
+      </div>
+    </div>
+
+    <!-- FILE INPUT: di luar drop zone agar tidak mengganggu click event -->
+    <input type="file" id="file-input" accept="audio/*" style="display:none">
+
+    <!-- DROP ZONE -->
+    <label for="file-input" class="drop-zone" id="drop-zone">
+      <div class="drop-zone-icon">♪</div>
+      <div class="drop-zone-text">Klik di sini atau seret file audio</div>
+      <div class="drop-zone-sub">
+        <span>MP3</span>·<span>WAV</span>·<span>FLAC</span>·<span>OGG</span>·<span>AAC</span>
+      </div>
+    </label>
+
+    <!-- SPECTRUM VISUALIZER -->
+    <div class="spectrum-container">
+      <div class="spectrum-bars" id="spectrum-bars"></div>
+      <div class="spectrum-freq-labels">
+        <span>0</span><span>BASS</span><span>MID</span><span>HIGH</span><span>20k</span>
+      </div>
+    </div>
+
+    <!-- PLAYER CONTROLS -->
+    <div class="player-bar">
+      <button class="play-btn" id="play-btn" onclick="togglePlay()" title="Play / Pause">
+        <span id="play-icon">▶</span>
+      </button>
+      <div class="progress-wrap">
+        <div class="progress-track" id="progress-track" onclick="seekAudio(event)">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="time-row">
+          <span id="time-cur">0:00</span>
+          <span id="file-name-label">—</span>
+          <span id="time-dur">0:00</span>
+        </div>
+      </div>
+      <div class="vol-wrap">
+        <span class="vol-icon">🔊</span>
+        <input type="range" class="vol-slider" id="vol-slider" min="0" max="1" step="0.01" value="0.8" oninput="setVolume(this.value)">
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls-row">
+      <input type="checkbox" id="flip-toggle" onchange="toggleFlip()">
+      <label class="toggle-label" for="flip-toggle">
+        Balik Horizontal (Bass Kanan)
+        <div class="toggle-box"></div>
+      </label>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-text">© 2025 IDR Spectrum</div>
+    <div class="footer-text">Kurs: <a class="footer-link" href="https://www.google.com/finance/quote/USD-IDR" target="_blank">Google Finance ↗</a></div>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let audioCtx = null;
+let analyser = null;
+let source = null;
+let audioBuffer = null;
+let gainNode = null;
+let isPlaying = false;
+let startTime = 0;
+let pauseOffset = 0;
+let animId = null;
+let specMode = 'BASS';
+let isFlipped = false;
+let chartData = [];
+let currentRate = 0;
+let prevRate = 0;
+let currentPeriod = '1M';
+
+const NUM_BARS = 64;
+
+// ─── INIT SPECTRUM BARS ──────────────────────────────────────────────────────
+const specContainer = document.getElementById('spectrum-bars');
+const bars = [];
+
+for (let i = 0; i < NUM_BARS; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'spec-bar';
+  bar.style.height = '1px';
+  specContainer.appendChild(bar);
+  bars.push(bar);
+}
+
+function getBarColor(i, total, amplitude) {
+  const pos = i / total;
+  const intensity = Math.min(1, amplitude / 255);
+  if (specMode === 'BASS') {
+    const h = 120 - pos * 60;
+    const l = 35 + intensity * 25;
+    return `hsl(${h}, 80%, ${l}%)`;
+  } else if (specMode === 'MID') {
+    const h = 60 - pos * 30;
+    const l = 35 + intensity * 25;
+    return `hsl(${h}, 75%, ${l}%)`;
+  } else if (specMode === 'MAKS') {
+    const h = 160 - pos * 120;
+    return `hsl(${h}, 90%, ${40 + intensity * 20}%)`;
+  } else {
+    const h = 140 - pos * 100;
+    return `hsl(${h}, 75%, ${35 + intensity * 20}%)`;
+  }
+}
+
+// ─── AUDIO SETUP ─────────────────────────────────────────────────────────────
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = 0.8;
+  gainNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+document.getElementById('file-input').addEventListener('change', function (e) {
+  if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', (e) => { e.stopPropagation(); dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('audio/')) loadFile(file);
+});
+
+function loadFile(file) {
+  initAudio();
+  if (isPlaying) stopAudio();
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    audioCtx.decodeAudioData(e.target.result).then(buf => {
+      audioBuffer = buf;
+      pauseOffset = 0;
+      document.getElementById('file-name-label').textContent = truncate(file.name, 22);
+      document.getElementById('time-dur').textContent = formatTime(buf.duration);
+      document.getElementById('drop-zone').querySelector('.drop-zone-text').textContent = file.name;
+      document.getElementById('live-dot').classList.add('active');
+      document.getElementById('live-text').textContent = 'SIAP';
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+}
+
+function togglePlay() {
+  if (!audioBuffer) return;
+  if (isPlaying) pauseAudio();
+  else playAudio();
+}
+
+function playAudio() {
+  if (!audioBuffer || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  source = audioCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(gainNode);
+  source.start(0, pauseOffset);
+  startTime = audioCtx.currentTime - pauseOffset;
+  isPlaying = true;
+  document.getElementById('play-icon').textContent = '⏸';
+  document.getElementById('play-btn').classList.add('playing');
+  document.getElementById('live-dot').classList.add('active');
+  document.getElementById('live-text').textContent = 'LIVE';
+  source.onended = () => {
+    if (isPlaying) {
+      isPlaying = false;
+      pauseOffset = 0;
+      document.getElementById('play-icon').textContent = '▶';
+      document.getElementById('play-btn').classList.remove('playing');
+      document.getElementById('live-text').textContent = 'SELESAI';
+    }
+  };
+  animate();
+}
+
+function pauseAudio() {
+  if (!isPlaying) return;
+  pauseOffset = audioCtx.currentTime - startTime;
+  source.stop();
+  isPlaying = false;
+  document.getElementById('play-icon').textContent = '▶';
+  document.getElementById('play-btn').classList.remove('playing');
+  document.getElementById('live-text').textContent = 'PAUSE';
+  if (animId) cancelAnimationFrame(animId);
+}
+
+function stopAudio() {
+  if (source) try { source.stop(); } catch (e) {}
+  isPlaying = false;
+  pauseOffset = 0;
+  if (animId) cancelAnimationFrame(animId);
+}
+
+function seekAudio(e) {
+  if (!audioBuffer) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const ratio = (e.clientX - rect.left) / rect.width;
+  pauseOffset = ratio * audioBuffer.duration;
+  if (isPlaying) { stopAudio(); isPlaying = false; playAudio(); }
+}
+
+function setVolume(v) { if (gainNode) gainNode.gain.value = parseFloat(v); }
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+// ─── ANIMATE ─────────────────────────────────────────────────────────────────
+const dataArr = new Uint8Array(1024);
+let lastRateUpdate = 0;
+
+function animate() {
+  if (!isPlaying) return;
+  animId = requestAnimationFrame(animate);
+
+  analyser.getByteFrequencyData(dataArr);
+
+  // update progress
+  const elapsed = audioCtx.currentTime - startTime;
+  const dur = audioBuffer ? audioBuffer.duration : 1;
+  const pct = Math.min(100, (elapsed / dur) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('time-cur').textContent = formatTime(elapsed);
+
+  // spectrum bars
+  updateBars(dataArr);
+
+  // update rate based on audio energy
+  const now = Date.now();
+  if (now - lastRateUpdate > 80) {
+    lastRateUpdate = now;
+    updateRateFromAudio(dataArr);
+  }
+}
+
+function updateBars(data) {
+  const len = bars.length;
+  const flip = isFlipped;
+
+  if (specMode === 'WAVE') {
+    const waveData = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(waveData);
+    for (let i = 0; i < len; i++) {
+      const idx = flip ? len - 1 - i : i;
+      const sample = waveData[Math.floor(i * waveData.length / len)];
+      const h = Math.abs(sample - 128) / 128 * 78;
+      bars[idx].style.height = Math.max(1, Math.round(h)) + 'px';
+      bars[idx].style.background = getBarColor(i, len, h * 3);
+    }
+    return;
+  }
+
+  let freqStart = 0, freqEnd = 512;
+  if (specMode === 'BASS') { freqStart = 0; freqEnd = 64; }
+  else if (specMode === 'MID') { freqStart = 64; freqEnd = 256; }
+  else if (specMode === 'MAKS') { freqStart = 0; freqEnd = 512; }
+
+  const span = freqEnd - freqStart;
+
+  for (let i = 0; i < len; i++) {
+    const idx = flip ? len - 1 - i : i;
+    const dataIdx = Math.floor(freqStart + (i / len) * span);
+    const val = data[Math.min(dataIdx, data.length - 1)];
+    const h = (val / 255) * 78;
+    bars[idx].style.height = Math.max(1, Math.round(h)) + 'px';
+    bars[idx].style.background = getBarColor(i, len, val);
+  }
+}
+
+function updateRateFromAudio(data) {
+  // compute energy in bass region
+  let bassEnergy = 0;
+  for (let i = 0; i < 32; i++) bassEnergy += data[i];
+  bassEnergy /= 32;
+
+  // compute overall energy
+  let totalEnergy = 0;
+  for (let i = 0; i < 256; i++) totalEnergy += data[i];
+  totalEnergy /= 256;
+
+  // rate delta based on energy
+  const bassDelta = ((bassEnergy / 255) - 0.4) * 120;
+  const totalDelta = ((totalEnergy / 255) - 0.35) * 60;
+  const delta = Math.round(bassDelta + totalDelta + (Math.random() - 0.5) * 20);
+
+  prevRate = currentRate;
+  currentRate = Math.max(16500, Math.min(19500, currentRate + delta));
+
+  const formatted = currentRate.toLocaleString('id-ID');
+  const rateEl = document.getElementById('rate-number');
+  const changeEl = document.getElementById('rate-change');
+
+  rateEl.textContent = formatted;
+
+  if (delta > 5) {
+    rateEl.className = 'rate-number flash-up';
+    changeEl.textContent = `▲ +${Math.abs(delta)}`;
+    changeEl.className = 'rate-change show up';
+  } else if (delta < -5) {
+    rateEl.className = 'rate-number flash-down';
+    changeEl.textContent = `▼ −${Math.abs(delta)}`;
+    changeEl.className = 'rate-change show down';
+  } else {
+    rateEl.className = 'rate-number';
+    changeEl.className = 'rate-change';
+  }
+
+  // push to chart
+  chartData.push(currentRate);
+  if (chartData.length > 80) chartData.shift();
+  drawChart();
+}
+
+// ─── CHART ───────────────────────────────────────────────────────────────────
+function drawChart() {
+  const canvas = document.getElementById('chart-canvas');
+  const wrapper = canvas.parentElement;
+  const W = wrapper.offsetWidth - 56;
+  const H = 160;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  if (chartData.length < 2) {
+    // draw flat reference line
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H / 2);
+    ctx.lineTo(W, H / 2);
+    ctx.stroke();
+    updateChartLabels(17000, 19000);
+    return;
+  }
+
+  const minV = Math.min(...chartData);
+  const maxV = Math.max(...chartData);
+  const pad = (maxV - minV) * 0.15 || 200;
+  const lo = minV - pad;
+  const hi = maxV + pad;
+
+  const toY = v => H - ((v - lo) / (hi - lo)) * H;
+  const toX = (i, len) => (i / (len - 1)) * W;
+
+  const pts = chartData.map((v, i) => ({ x: toX(i, chartData.length), y: toY(v) }));
+
+  // grid lines
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 0.5;
+  for (let g = 0; g <= 4; g++) {
+    const y = (g / 4) * H;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // fill
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.lineTo(pts[pts.length - 1].x, H);
+  ctx.lineTo(pts[0].x, H);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+
+  const last = chartData[chartData.length - 1];
+  const first = chartData[0];
+  const isUp = last >= first;
+  const lineColor = isUp ? '#00e676' : '#ff5252';
+  const fillColor = isUp ? 'rgba(0,230,118,' : 'rgba(255,82,82,';
+
+  grad.addColorStop(0, fillColor + '0.15)');
+  grad.addColorStop(1, fillColor + '0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // last dot
+  const lp = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(lp.x, lp.y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+
+  updateChartLabels(lo, hi);
+}
+
+function updateChartLabels(lo, hi) {
+  const yLabels = document.getElementById('y-labels');
+  yLabels.innerHTML = '';
+  for (let i = 0; i <= 3; i++) {
+    const v = hi - (i / 3) * (hi - lo);
+    const sp = document.createElement('span');
+    sp.textContent = Math.round(v).toLocaleString('id-ID');
+    yLabels.appendChild(sp);
+  }
+}
+
+function setPeriod(p) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-tab').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function setMode(m) {
+  specMode = m;
+  document.querySelectorAll('.mode-tab').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function toggleFlip() {
+  isFlipped = document.getElementById('flip-toggle').checked;
+}
+
+// ─── FETCH REAL RATE ─────────────────────────────────────────────────────────
+async function fetchRate() {
+  try {
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const data = await res.json();
+    const rate = data.rates.IDR;
+    if (!rate) throw new Error('no rate');
+    currentRate = Math.round(rate);
+    prevRate = currentRate;
+
+    // seed chart with some history variation
+    for (let i = 0; i < 40; i++) {
+      const noise = (Math.random() - 0.5) * 300;
+      chartData.push(Math.round(currentRate * 0.97 + (i / 40) * currentRate * 0.03 + noise));
+    }
+    chartData.push(currentRate);
+
+    document.getElementById('rate-number').textContent = currentRate.toLocaleString('id-ID');
+    const now = new Date();
+    document.getElementById('rate-meta').textContent =
+      `${now.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des')[now.getMonth()]} · ${now.getUTCHours().toString().padStart(2,'0')}:${now.getUTCMinutes().toString().padStart(2,'0')} UTC · Dari ExchangeRate-API`;
+
+    drawChart();
+    document.getElementById('live-dot').classList.add('active');
+    document.getElementById('live-text').textContent = 'LIVE';
+  } catch (e) {
+    currentRate = 18176;
+    for (let i = 0; i < 40; i++) {
+      chartData.push(17300 + (i / 40) * 800 + (Math.random() - 0.5) * 150);
+    }
+    chartData.push(currentRate);
+    document.getElementById('rate-number').textContent = currentRate.toLocaleString('id-ID');
+    document.getElementById('rate-meta').textContent = '8 Jun · 10.24 UTC · Dari Morningstar · Penafian';
+    drawChart();
+    document.getElementById('live-text').textContent = 'OFFLINE';
+  }
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+fetchRate();
+drawChart();
+
+window.addEventListener('resize', () => { if (!isPlaying) drawChart(); });
+</script>
+</body>
+</html>
