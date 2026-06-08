@@ -719,6 +719,11 @@ function getBarColor(i, total, amplitude) {
 }
 
 // ─── AUDIO SETUP ─────────────────────────────────────────────────────────────
+// ─── AUDIO ENGINE: pakai HTMLAudioElement + createMediaElementSource
+// Kompatibel Firefox, Chrome, Safari tanpa perlu decode manual
+let audioEl = new Audio();
+audioEl.crossOrigin = 'anonymous';
+
 function initAudio() {
   if (audioCtx) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -729,9 +734,11 @@ function initAudio() {
   analyser.fftSize = 2048;
   gainNode = audioCtx.createGain();
   gainNode.gain.value = 0.8;
+  // sambungkan audio element ke Web Audio graph
+  const mediaSource = audioCtx.createMediaElementSource(audioEl);
+  mediaSource.connect(gainNode);
   gainNode.connect(analyser);
   analyser.connect(audioCtx.destination);
-  audioCtx.resume();
 }
 
 document.getElementById('file-input').addEventListener('change', function (e) {
@@ -746,41 +753,39 @@ dropZone.addEventListener('drop', (e) => {
   e.stopPropagation();
   dropZone.classList.remove('dragover');
   const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('audio/')) loadFile(file);
+  if (file) loadFile(file);
 });
 
 function loadFile(file) {
   initAudio();
-  if (isPlaying) stopAudio();
 
-  const dropText = document.getElementById("drop-zone").querySelector(".drop-zone-text");
-  dropText.textContent = "Memuat: " + file.name;
-  document.getElementById("live-text").textContent = "LOADING";
+  const dropText = document.getElementById('drop-zone').querySelector('.drop-zone-text');
+  dropText.textContent = 'Memuat: ' + file.name;
+  document.getElementById('live-text').textContent = 'LOADING';
 
-  const reader = new FileReader();
-  reader.onload = function (ev) {
-    const arrayBuf = ev.target.result.slice(0);
-    audioCtx.resume().then(() => {
-      audioCtx.decodeAudioData(arrayBuf, function(buf) {
-        audioBuffer = buf;
-        pauseOffset = 0;
-        document.getElementById("file-name-label").textContent = truncate(file.name, 22);
-        document.getElementById("time-dur").textContent = formatTime(buf.duration);
-        dropText.textContent = "✓ " + file.name;
-        document.getElementById("live-dot").classList.add("active");
-        document.getElementById("live-text").textContent = "SIAP";
-        document.getElementById("play-btn").style.borderColor = "var(--accent)";
-      }, function(err) {
-        dropText.textContent = "✗ Gagal decode — coba file lain";
-        document.getElementById("live-text").textContent = "ERROR";
-        console.error("decodeAudioData error:", err);
-      });
-    });
+  // revoke URL lama kalau ada
+  if (audioEl.src && audioEl.src.startsWith('blob:')) {
+    URL.revokeObjectURL(audioEl.src);
+  }
+
+  const objectURL = URL.createObjectURL(file);
+  audioEl.src = objectURL;
+  audioEl.load();
+
+  audioEl.oncanplaythrough = function () {
+    audioBuffer = true; // flag: file siap
+    document.getElementById('file-name-label').textContent = truncate(file.name, 22);
+    document.getElementById('time-dur').textContent = formatTime(audioEl.duration);
+    dropText.textContent = '✓ ' + file.name;
+    document.getElementById('live-dot').classList.add('active');
+    document.getElementById('live-text').textContent = 'SIAP';
+    document.getElementById('play-btn').style.borderColor = 'var(--accent)';
   };
-  reader.onerror = function() {
-    dropText.textContent = "✗ Gagal baca file";
+
+  audioEl.onerror = function () {
+    dropText.textContent = '✗ Format tidak didukung — coba MP3 atau WAV';
+    document.getElementById('live-text').textContent = 'ERROR';
   };
-  reader.readAsArrayBuffer(file);
 }
 
 function truncate(str, n) {
@@ -794,34 +799,28 @@ function togglePlay() {
 }
 
 function playAudio() {
-  if (!audioBuffer || !audioCtx) return;
+  if (!audioBuffer) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  source = audioCtx.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(gainNode);
-  source.start(0, pauseOffset);
-  startTime = audioCtx.currentTime - pauseOffset;
+  audioEl.play();
   isPlaying = true;
+  startTime = audioCtx.currentTime - audioEl.currentTime;
   document.getElementById('play-icon').textContent = '⏸';
   document.getElementById('play-btn').classList.add('playing');
   document.getElementById('live-dot').classList.add('active');
   document.getElementById('live-text').textContent = 'LIVE';
-  source.onended = () => {
-    if (isPlaying) {
-      isPlaying = false;
-      pauseOffset = 0;
-      document.getElementById('play-icon').textContent = '▶';
-      document.getElementById('play-btn').classList.remove('playing');
-      document.getElementById('live-text').textContent = 'SELESAI';
-    }
+  audioEl.onended = () => {
+    isPlaying = false;
+    document.getElementById('play-icon').textContent = '▶';
+    document.getElementById('play-btn').classList.remove('playing');
+    document.getElementById('live-text').textContent = 'SELESAI';
+    if (animId) cancelAnimationFrame(animId);
   };
   animate();
 }
 
 function pauseAudio() {
   if (!isPlaying) return;
-  pauseOffset = audioCtx.currentTime - startTime;
-  source.stop();
+  audioEl.pause();
   isPlaying = false;
   document.getElementById('play-icon').textContent = '▶';
   document.getElementById('play-btn').classList.remove('playing');
@@ -830,9 +829,9 @@ function pauseAudio() {
 }
 
 function stopAudio() {
-  if (source) try { source.stop(); } catch (e) {}
+  audioEl.pause();
+  audioEl.currentTime = 0;
   isPlaying = false;
-  pauseOffset = 0;
   if (animId) cancelAnimationFrame(animId);
 }
 
@@ -840,8 +839,7 @@ function seekAudio(e) {
   if (!audioBuffer) return;
   const rect = e.currentTarget.getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / rect.width;
-  pauseOffset = ratio * audioBuffer.duration;
-  if (isPlaying) { stopAudio(); isPlaying = false; playAudio(); }
+  audioEl.currentTime = ratio * audioEl.duration;
 }
 
 function setVolume(v) { if (gainNode) gainNode.gain.value = parseFloat(v); }
@@ -863,8 +861,8 @@ function animate() {
   analyser.getByteFrequencyData(dataArr);
 
   // update progress
-  const elapsed = audioCtx.currentTime - startTime;
-  const dur = audioBuffer ? audioBuffer.duration : 1;
+  const elapsed = audioEl.currentTime;
+  const dur = audioEl.duration || 1;
   const pct = Math.min(100, (elapsed / dur) * 100);
   document.getElementById('progress-fill').style.width = pct + '%';
   document.getElementById('time-cur').textContent = formatTime(elapsed);
